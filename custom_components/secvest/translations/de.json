@@ -1,0 +1,15 @@
+{
+  "config": {
+    "error": {
+      "cannot_connect": "Keine Verbindung möglich",
+      "unknown": "Unbekannter Fehler"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Optionen"
+      }
+    }
+  }
+}

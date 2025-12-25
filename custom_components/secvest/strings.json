@@ -1,0 +1,36 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "ABUS Secvest",
+        "description": "Verbinde Home Assistant mit deiner ABUS Secvest.",
+        "data": {
+          "host": "Host (z.B. https://192.168.2.22:4433)",
+          "username": "Username",
+          "password": "Password",
+          "user_code": "User Code / PIN",
+          "verify_ssl": "SSL Zertifikat prüfen",
+          "scan_interval": "Scan Intervall (Sekunden)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Keine Verbindung möglich",
+      "unknown": "Unbekannter Fehler"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Optionen",
+        "data": {
+          "scan_interval": "Scan Intervall (Sekunden)",
+          "zones_interval": "Zonen Intervall (Sekunden)",
+          "retries": "Retries",
+          "breaker_threshold": "Circuit Breaker Schwelle",
+          "breaker_cooldown": "Circuit Breaker Cooldown (Sekunden)"
+        }
+      }
+    }
+  }
+}

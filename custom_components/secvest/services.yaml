@@ -1,0 +1,14 @@
+set_mode:
+  name: Set mode
+  description: Set Secvest mode (set/partset/unset)
+  fields:
+    mode:
+      name: Mode
+      description: "set = armed_away, partset = armed_home, unset = disarmed"
+      required: true
+      selector:
+        select:
+          options:
+            - set
+            - partset
+            - unset

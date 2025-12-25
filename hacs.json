@@ -1,0 +1,10 @@
+{
+  "name": "ABUS Secvest",
+  "content_in_root": false,
+  "domains": [
+    "secvest"
+  ],
+  "homeassistant": "2025.12.0",
+  "iot_class": "local_polling",
+  "zip_release": false
+}
