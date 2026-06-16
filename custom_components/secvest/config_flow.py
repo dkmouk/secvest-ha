@@ -39,21 +39,24 @@ class SecvestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         schema = vol.Schema(
             {
-                vol.Required(CONF_HOST): str,
+                vol.Required(CONF_HOST): str,  # z.B. https://192.168.2.22:4433
                 vol.Required(CONF_USERNAME): str,
                 vol.Required(CONF_PASSWORD): str,
                 vol.Required(CONF_USER_CODE): str,
                 vol.Optional(CONF_VERIFY_SSL, default=False): bool,
                 vol.Optional(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): int,
+                vol.Optional(CONF_ZONES_INTERVAL, default=DEFAULT_ZONES_INTERVAL): int,
             }
         )
 
         if user_input is None:
             return self.async_show_form(step_id="user", data_schema=schema)
 
+        # --- Robust connectivity test: TCP only (no HTTP/TLS) ---
         try:
             host_input = user_input[CONF_HOST].strip()
             parsed = urlparse(host_input if "://" in host_input else f"https://{host_input}")
+
             hostname = parsed.hostname
             port = parsed.port or (443 if parsed.scheme == "https" else 80)
 
@@ -82,6 +85,7 @@ class SecvestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return SecvestOptionsFlowHandler(config_entry)
 
     async def _async_test_tcp_socket(self, host: str, port: int, timeout: int = 20, retries: int = 3) -> None:
+        """TCP test via socket.create_connection in executor. Raises on failure."""
         last_exc: Exception | None = None
 
         def _connect_blocking():
@@ -115,8 +119,14 @@ class SecvestOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(CONF_SCAN_INTERVAL, default=opts.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)): int,
                 vol.Optional(CONF_ZONES_INTERVAL, default=opts.get(CONF_ZONES_INTERVAL, DEFAULT_ZONES_INTERVAL)): int,
                 vol.Optional(CONF_RETRIES, default=opts.get(CONF_RETRIES, DEFAULT_RETRIES)): int,
-                vol.Optional(CONF_BREAKER_THRESHOLD, default=opts.get(CONF_BREAKER_THRESHOLD, DEFAULT_BREAKER_THRESHOLD)): int,
-                vol.Optional(CONF_BREAKER_COOLDOWN, default=opts.get(CONF_BREAKER_COOLDOWN, DEFAULT_BREAKER_COOLDOWN)): int,
+                vol.Optional(
+                    CONF_BREAKER_THRESHOLD,
+                    default=opts.get(CONF_BREAKER_THRESHOLD, DEFAULT_BREAKER_THRESHOLD),
+                ): int,
+                vol.Optional(
+                    CONF_BREAKER_COOLDOWN,
+                    default=opts.get(CONF_BREAKER_COOLDOWN, DEFAULT_BREAKER_COOLDOWN),
+                ): int,
             }
         )
 

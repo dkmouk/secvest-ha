@@ -1,8 +1,37 @@
 {
   "config": {
+    "step": {
+      "user": {
+        "title": "Connect Secvest",
+        "description": "Host, for example https://192.168.2.22:4433. With newer Secvest firmware, you may need to enter the user code in the Username / Code field. Shorter intervals react faster but create more requests to the Secvest.",
+        "data": {
+          "host": "Host",
+          "username": "Username / Code",
+          "password": "Password",
+          "user_code": "User PIN / arm code",
+          "verify_ssl": "Verify SSL (turn off for self-signed certificates)",
+          "scan_interval": "Status interval (seconds)",
+          "zones_interval": "Zone/sensor interval (seconds)"
+        }
+      }
+    },
     "error": {
-      "cannot_connect": "Cannot connect",
-      "unknown": "Unknown error"
+      "cannot_connect": "Connection failed"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Secvest Options",
+        "description": "For faster sensor updates, set the status interval and zone/sensor interval to e.g. 10 seconds.",
+        "data": {
+          "scan_interval": "Status interval (seconds)",
+          "zones_interval": "Zone/sensor interval (seconds)",
+          "retries": "Retries on errors",
+          "breaker_threshold": "Errors before cooldown",
+          "breaker_cooldown": "Cooldown (seconds)"
+        }
+      }
     }
   }
 }

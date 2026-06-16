@@ -1,14 +1,36 @@
 {
   "config": {
+    "step": {
+      "user": {
+        "title": "Secvest verbinden",
+        "description": "Host z.B. https://192.168.2.22:4433. Bei neuer Secvest-Firmware muss im Feld Benutzername / Code ggf. der Benutzer-Code eingetragen werden. Kürzere Intervalle reagieren schneller, erzeugen aber mehr Abfragen an die Secvest.",
+        "data": {
+          "host": "Host",
+          "username": "Benutzername / Code",
+          "password": "Passwort",
+          "user_code": "Benutzer-PIN / Schaltcode",
+          "verify_ssl": "SSL prüfen (bei selbstsigniertem Zertifikat AUS)",
+          "scan_interval": "Status-Intervall (Sek.)",
+          "zones_interval": "Melder-/Zonen-Intervall (Sek.)"
+        }
+      }
+    },
     "error": {
-      "cannot_connect": "Keine Verbindung möglich",
-      "unknown": "Unbekannter Fehler"
+      "cannot_connect": "Verbindung fehlgeschlagen"
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Optionen"
+        "title": "Secvest Optionen",
+        "description": "Für schnellere Melderreaktion Status-Intervall und Melder-/Zonen-Intervall z.B. auf 10 Sekunden setzen.",
+        "data": {
+          "scan_interval": "Status-Intervall (Sek.)",
+          "zones_interval": "Melder-/Zonen-Intervall (Sek.)",
+          "retries": "Wiederholungen bei Fehlern",
+          "breaker_threshold": "Fehler bis Schutzpause",
+          "breaker_cooldown": "Schutzpause (Sek.)"
+        }
       }
     }
   }

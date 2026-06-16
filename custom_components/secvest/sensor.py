@@ -5,10 +5,24 @@ from typing import Any
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
+
+
+def _faults(data: Any) -> list[dict[str, Any]]:
+    faults = getattr(data, "faults", None)
+    if isinstance(faults, list):
+        return [item for item in faults if isinstance(item, dict)]
+    return []
+
+
+def _outputs(data: Any) -> list[dict[str, Any]]:
+    outputs = getattr(data, "outputs", None)
+    if isinstance(outputs, list):
+        return [item for item in outputs if isinstance(item, dict)]
+    return []
 
 
 async def async_setup_entry(
@@ -26,6 +40,9 @@ async def async_setup_entry(
             SecvestSimpleSensor(coordinator, entry, "Open Zones (CSV)", "open_zones_csv"),
             SecvestSimpleSensor(coordinator, entry, "Open Zones Spoken", "open_zones_spoken"),
             SecvestDerivedSensor(coordinator, entry, "Open Zones Count", "open_zones_count"),
+            SecvestDerivedSensor(coordinator, entry, "Secvest Faults Anzahl", "fault_count"),
+            SecvestFaultListSensor(coordinator, entry),
+            SecvestDerivedSensor(coordinator, entry, "Secvest Outputs Anzahl", "output_count"),
             SecvestSimpleSensor(coordinator, entry, "Last Error", "last_error"),
         ],
         True,
@@ -36,6 +53,7 @@ class SecvestBaseEntity:
     def __init__(self, coordinator, entry: ConfigEntry) -> None:
         self.coordinator = coordinator
         self._entry = entry
+        self._remove_coordinator_listener = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -48,10 +66,14 @@ class SecvestBaseEntity:
         )
 
     async def async_added_to_hass(self) -> None:
-        self.coordinator.async_add_listener(self.async_write_ha_state)
+        self._remove_coordinator_listener = self.coordinator.async_add_listener(
+            self.async_write_ha_state
+        )
 
     async def async_will_remove_from_hass(self) -> None:
-        self.coordinator.async_remove_listener(self.async_write_ha_state)
+        if self._remove_coordinator_listener:
+            self._remove_coordinator_listener()
+            self._remove_coordinator_listener = None
 
 
 class SecvestSimpleSensor(SecvestBaseEntity, SensorEntity):
@@ -70,10 +92,8 @@ class SecvestSimpleSensor(SecvestBaseEntity, SensorEntity):
             return None
 
         val = getattr(d, self._key, None)
-
         if self._key == "last_error":
             return val or "OK"
-
         return val
 
 
@@ -83,16 +103,43 @@ class SecvestDerivedSensor(SecvestBaseEntity, SensorEntity):
         self._key = key
         self._attr_name = name
         self._attr_unique_id = f"{entry.entry_id}_sensor_{key}"
+        if key in {"fault_count", "output_count"}:
+            self._attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property
     def native_value(self) -> Any:
         d = self.coordinator.data
         if not d:
-            if self._key == "open_zones_count":
-                return 0
-            return None
+            return 0
 
         if self._key == "open_zones_count":
             return len(d.open_zone_names) if d.open_zone_names else 0
-
+        if self._key == "fault_count":
+            return len(_faults(d))
+        if self._key == "output_count":
+            return len(_outputs(d))
         return None
+
+
+class SecvestFaultListSensor(SecvestBaseEntity, SensorEntity):
+    _attr_name = "Secvest Faults Liste"
+    _attr_icon = "mdi:format-list-bulleted"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator, entry: ConfigEntry) -> None:
+        SecvestBaseEntity.__init__(self, coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_sensor_fault_list"
+
+    @property
+    def native_value(self) -> str:
+        faults = _faults(self.coordinator.data)
+        values = [
+            str(fault.get("ui-string") or fault.get("text") or fault.get("name"))
+            for fault in faults
+            if fault.get("ui-string") or fault.get("text") or fault.get("name")
+        ]
+        return ", ".join(values) if values else "OK"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"faults": _faults(self.coordinator.data)}

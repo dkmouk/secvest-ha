@@ -32,6 +32,20 @@ def normalize_name(name: str) -> str:
     )
 
 
+@dataclass
+class SecvestData:
+    raw_mode: str | None
+    human_mode: str | None
+    zones: dict[str, dict[str, Any]]  # key -> {name, state}
+    faults: list[dict[str, Any]]
+    outputs: list[dict[str, Any]]
+    open_zone_names: list[str]
+    open_zones_csv: str
+    open_zones_spoken: str
+    available: bool
+    last_error: str | None
+
+
 def make_spoken_zone_list(zones: list[str]) -> str:
     if not zones:
         return ""
@@ -43,48 +57,6 @@ def make_spoken_zone_list(zones: list[str]) -> str:
         "Ich konnte die Alarmanlage nicht aktivieren, bitte folgende Fenster und Türen schließen: "
         f"{head} und {last}."
     )
-
-
-def build_zones_dict(
-    zones_payload: list[dict[str, Any]],
-    zone_name_map: dict[str, str] | None = None,
-) -> dict[str, dict[str, Any]]:
-    """Build normalized zones dict and enrich with friendly_name (single source of truth)."""
-    zone_name_map = zone_name_map or {}
-    out: dict[str, dict[str, Any]] = {}
-
-    for z in zones_payload:
-        if not isinstance(z, dict):
-            continue
-        raw_name = z.get("name")
-        state = z.get("state")
-        if not isinstance(raw_name, str) or not isinstance(state, str):
-            continue
-
-        key = normalize_name(raw_name)
-        friendly = zone_name_map.get(key) or zone_name_map.get(raw_name)
-        if not friendly:
-            friendly = key.replace("_", " ")
-
-        out[key] = {
-            "name": raw_name,
-            "friendly_name": friendly,
-            "state": state,
-        }
-
-    return out
-
-
-@dataclass
-class SecvestData:
-    raw_mode: str | None
-    human_mode: str | None
-    zones: dict[str, dict[str, Any]]
-    open_zone_names: list[str]
-    open_zones_csv: str
-    open_zones_spoken: str
-    available: bool
-    last_error: str | None
 
 
 class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
@@ -102,126 +74,142 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
             hass,
             logger=_LOGGER,
             name="Secvest Coordinator",
-            update_interval=timedelta(seconds=int(scan_interval_s)),
+            update_interval=timedelta(seconds=scan_interval_s),
         )
-
         self.api = api
-        self.zone_name_map: dict[str, str] = zone_name_map or {}
 
-        self._zones_interval = timedelta(seconds=int(zones_interval_s))
-        self._zones_tick = 0
+        self._zone_name_map = zone_name_map or {}
+        self._zones_interval = timedelta(seconds=zones_interval_s)
+        self._zones_tick = int(self._zones_interval.total_seconds())
 
+        # Circuit breaker
         self._consecutive_failures = 0
         self._breaker_until = 0.0
         self._breaker_threshold = max(1, int(breaker_threshold))
         self._breaker_cooldown = max(10, int(breaker_cooldown))
         self._last_error: str | None = None
 
-    def _compose_data(
-        self,
-        *,
-        raw_mode: str | None,
-        human_mode: str | None,
-        zones: dict[str, dict[str, Any]],
-        available: bool,
-        last_error: str | None,
-    ) -> SecvestData:
-        open_zone_names = [
-            z["friendly_name"]
-            for z in zones.values()
-            if isinstance(z, dict) and z.get("state") == "open" and isinstance(z.get("friendly_name"), str)
-        ]
-        open_zones_csv = ", ".join(open_zone_names)
-        open_zones_spoken = make_spoken_zone_list(open_zone_names)
-
+    def _with_status(self, base: SecvestData, *, available: bool, last_error: str | None) -> SecvestData:
+        """Return a copy of base data with updated availability/error info."""
         return SecvestData(
-            raw_mode=raw_mode,
-            human_mode=human_mode,
-            zones=zones,
-            open_zone_names=open_zone_names,
-            open_zones_csv=open_zones_csv,
-            open_zones_spoken=open_zones_spoken,
+            raw_mode=base.raw_mode,
+            human_mode=base.human_mode,
+            zones=base.zones,
+            faults=base.faults,
+            outputs=base.outputs,
+            open_zone_names=base.open_zone_names,
+            open_zones_csv=base.open_zones_csv,
+            open_zones_spoken=base.open_zones_spoken,
             available=available,
             last_error=last_error,
         )
 
-    async def async_refresh_zones_now(self) -> None:
-        """Force a live zones refresh and publish data immediately (prevents stale zone status)."""
-        zones_payload = await self.api.get_zones()
-        zones_dict = build_zones_dict(zones_payload, self.zone_name_map)
-
-        d = self.data
-        if d:
-            new_data = self._compose_data(
-                raw_mode=d.raw_mode,
-                human_mode=d.human_mode,
-                zones=zones_dict,
-                available=True,
-                last_error=d.last_error,
-            )
-        else:
-            new_data = self._compose_data(
-                raw_mode=None,
-                human_mode=None,
-                zones=zones_dict,
-                available=True,
-                last_error=None,
-            )
-
-        self._last_error = None
-        self._consecutive_failures = 0
-        self._breaker_until = 0.0
-        self.async_set_updated_data(new_data)
-
     async def _async_update_data(self) -> SecvestData:
         now = time.time()
+
+        # Circuit breaker active: do not hammer device
         if now < self._breaker_until:
             if self.data:
-                return self._compose_data(
-                    raw_mode=self.data.raw_mode,
-                    human_mode=self.data.human_mode,
-                    zones=self.data.zones,
+                return self._with_status(
+                    self.data,
                     available=False,
                     last_error=self._last_error or "Circuit breaker active",
                 )
             raise UpdateFailed("Circuit breaker active")
 
         try:
+            # --- Always fetch mode ---
             raw_mode = await self.api.get_mode()
             human_mode = STATE_TRANSLATIONS.get(raw_mode, "Unbekannt")
 
+            # --- Fetch zones less frequently ---
+            # update_interval can be None theoretically, but in our case it is set
             interval_s = int(self.update_interval.total_seconds())  # type: ignore[union-attr]
             self._zones_tick += interval_s
 
+            zones_payload: list[dict[str, Any]] | None = None
+            faults_payload: list[dict[str, Any]] | None = None
+            outputs_payload: list[dict[str, Any]] | None = None
+            if self._zones_tick >= int(self._zones_interval.total_seconds()):
+                self._zones_tick = 0
+                zones_payload = await self.api.get_zones()
+                try:
+                    faults_payload = await self.api.get_faults()
+                except Exception as err:
+                    _LOGGER.debug("Secvest optional faults refresh failed: %r", err)
+                try:
+                    outputs_payload = await self.api.get_outputs()
+                except Exception as err:
+                    _LOGGER.debug("Secvest optional outputs refresh failed: %r", err)
+
+            # Keep old zones if we didn't fetch new ones
             zones_dict: dict[str, dict[str, Any]] = {}
             if self.data and self.data.zones:
                 zones_dict = dict(self.data.zones)
 
-            if self._zones_tick >= int(self._zones_interval.total_seconds()):
-                self._zones_tick = 0
-                zones_payload = await self.api.get_zones()
-                zones_dict = build_zones_dict(zones_payload, self.zone_name_map)
+            faults = list(self.data.faults) if self.data else []
+            outputs = list(self.data.outputs) if self.data else []
 
+            if zones_payload is not None:
+                zones_dict = {}
+                for z in zones_payload:
+                    name = z.get("name")
+                    state = z.get("state")
+                    if not isinstance(name, str) or not isinstance(state, str):
+                        continue
+                    key = normalize_name(name)
+                    zone_data = dict(z)
+                    zone_data["name"] = name
+                    zone_data["state"] = state
+                    zones_dict[key] = zone_data
+
+            if faults_payload is not None:
+                faults = faults_payload
+
+            if outputs_payload is not None:
+                outputs = outputs_payload
+
+            open_zone_names: list[str] = []
+            for key, z in zones_dict.items():
+                if z.get("state") == "open":
+                    friendly = (
+                        self._zone_name_map.get(key)
+                        or self._zone_name_map.get(z.get("name", ""))  # optional
+                    )
+                    if not friendly:
+                        friendly = key.replace("_", " ")
+                    open_zone_names.append(friendly)
+
+            open_zones_csv = ", ".join(open_zone_names)
+            spoken = make_spoken_zone_list(open_zone_names)
+
+            # Success: reset breaker
             self._consecutive_failures = 0
             self._breaker_until = 0.0
             self._last_error = None
 
-            return self._compose_data(
+            return SecvestData(
                 raw_mode=raw_mode,
                 human_mode=human_mode,
                 zones=zones_dict,
+                faults=faults,
+                outputs=outputs,
+                open_zone_names=open_zone_names,
+                open_zones_csv=open_zones_csv,
+                open_zones_spoken=spoken,
                 available=True,
                 last_error=None,
             )
 
         except (asyncio.TimeoutError, SecvestApiError) as err:
+            # Temporary error: keep last state, but mark unavailable
             self._consecutive_failures += 1
             self._last_error = repr(err)
 
             if self._consecutive_failures >= self._breaker_threshold:
                 self._breaker_until = time.time() + self._breaker_cooldown
                 _LOGGER.warning(
-                    "Secvest circuit breaker activated for %ss after %s failures. last_error=%s",
+                    "Secvest circuit breaker activated for %ss after %s consecutive failures. last_error=%s",
                     self._breaker_cooldown,
                     self._consecutive_failures,
                     self._last_error,
@@ -235,16 +223,12 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
                 )
 
             if self.data:
-                return self._compose_data(
-                    raw_mode=self.data.raw_mode,
-                    human_mode=self.data.human_mode,
-                    zones=self.data.zones,
-                    available=False,
-                    last_error=self._last_error,
-                )
-            raise UpdateFailed(self._last_error or "Update failed") from err
+                return self._with_status(self.data, available=False, last_error=self._last_error)
+
+            raise UpdateFailed(self._last_error or "Update failed")
 
         except Exception as err:
+            # Unknown hard error: log and keep last data if possible
             self._consecutive_failures += 1
             self._last_error = repr(err)
             _LOGGER.exception("Secvest update failed (unexpected): %s", self._last_error)
@@ -253,11 +237,6 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
                 self._breaker_until = time.time() + self._breaker_cooldown
 
             if self.data:
-                return self._compose_data(
-                    raw_mode=self.data.raw_mode,
-                    human_mode=self.data.human_mode,
-                    zones=self.data.zones,
-                    available=False,
-                    last_error=self._last_error,
-                )
-            raise UpdateFailed(self._last_error or "Update failed") from err
+                return self._with_status(self.data, available=False, last_error=self._last_error)
+
+            raise UpdateFailed(self._last_error or "Update failed")
