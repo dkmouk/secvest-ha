@@ -15,6 +15,8 @@ from .const import (
     CONF_USERNAME,
     CONF_PASSWORD,
     CONF_USER_CODE,
+    CONF_WEB_USERNAME,
+    CONF_WEB_PASSWORD,
     CONF_VERIFY_SSL,
     CONF_SCAN_INTERVAL,
     CONF_ZONES_INTERVAL,
@@ -82,7 +84,7 @@ class SecvestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     def async_get_options_flow(config_entry: ConfigEntry):
-        return SecvestOptionsFlowHandler(config_entry)
+        return SecvestOptionsFlowHandler()
 
     async def _async_test_tcp_socket(self, host: str, port: int, timeout: int = 20, retries: int = 3) -> None:
         """TCP test via socket.create_connection in executor. Raises on failure."""
@@ -105,9 +107,6 @@ class SecvestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class SecvestOptionsFlowHandler(config_entries.OptionsFlow):
-    def __init__(self, config_entry: ConfigEntry):
-        self.config_entry = config_entry
-
     async def async_step_init(self, user_input=None):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
@@ -118,6 +117,8 @@ class SecvestOptionsFlowHandler(config_entries.OptionsFlow):
             {
                 vol.Optional(CONF_SCAN_INTERVAL, default=opts.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)): int,
                 vol.Optional(CONF_ZONES_INTERVAL, default=opts.get(CONF_ZONES_INTERVAL, DEFAULT_ZONES_INTERVAL)): int,
+                vol.Optional(CONF_WEB_USERNAME, default=opts.get(CONF_WEB_USERNAME, "")): str,
+                vol.Optional(CONF_WEB_PASSWORD, default=opts.get(CONF_WEB_PASSWORD, "")): str,
                 vol.Optional(CONF_RETRIES, default=opts.get(CONF_RETRIES, DEFAULT_RETRIES)): int,
                 vol.Optional(
                     CONF_BREAKER_THRESHOLD,

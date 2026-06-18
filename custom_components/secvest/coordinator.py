@@ -130,9 +130,14 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
             zones_payload: list[dict[str, Any]] | None = None
             faults_payload: list[dict[str, Any]] | None = None
             outputs_payload: list[dict[str, Any]] | None = None
+            wireless_zones_payload: dict[int, dict[str, Any]] = {}
             if self._zones_tick >= int(self._zones_interval.total_seconds()):
                 self._zones_tick = 0
                 zones_payload = await self.api.get_zones()
+                try:
+                    wireless_zones_payload = await self.api.get_wireless_zones_status()
+                except Exception as err:
+                    _LOGGER.debug("Secvest optional wireless zones refresh failed: %r", err)
                 try:
                     faults_payload = await self.api.get_faults()
                 except Exception as err:
@@ -152,7 +157,7 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
 
             if zones_payload is not None:
                 zones_dict = {}
-                for z in zones_payload:
+                for idx, z in enumerate(zones_payload):
                     name = z.get("name")
                     state = z.get("state")
                     if not isinstance(name, str) or not isinstance(state, str):
@@ -161,6 +166,7 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
                     zone_data = dict(z)
                     zone_data["name"] = name
                     zone_data["state"] = state
+                    zone_data.update(wireless_zones_payload.get(idx, {}))
                     zones_dict[key] = zone_data
 
             if faults_payload is not None:

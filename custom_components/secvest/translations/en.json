@@ -23,10 +23,12 @@
     "step": {
       "init": {
         "title": "Secvest Options",
-        "description": "For faster sensor updates, set the status interval and zone/sensor interval to e.g. 10 seconds.",
+        "description": "For faster sensor updates, set the intervals to e.g. 10 seconds. For RSSI, optionally enter a separate restricted web user. RSSI polling stays disabled without web credentials.",
         "data": {
           "scan_interval": "Status interval (seconds)",
           "zones_interval": "Zone/sensor interval (seconds)",
+          "web_username": "Web user / code (RSSI only)",
+          "web_password": "Web password (RSSI only)",
           "retries": "Retries on errors",
           "breaker_threshold": "Errors before cooldown",
           "breaker_cooldown": "Cooldown (seconds)"

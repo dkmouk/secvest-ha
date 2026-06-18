@@ -12,3 +12,22 @@ secvest_set_mode:
             - set
             - partset
             - unset
+
+dump_diagnostics:
+  name: Dump Secvest diagnostics
+  description: Write raw Secvest mode, zones and faults data to a JSON file in the Home Assistant config folder.
+  fields:
+    filename:
+      name: Filename
+      description: File name in the Home Assistant config folder.
+      required: false
+      default: secvest_diagnostics.json
+      selector:
+        text:
+    include_outputs:
+      name: Include outputs
+      description: Also query and include Secvest outputs. Leave disabled unless needed.
+      required: false
+      default: false
+      selector:
+        boolean:

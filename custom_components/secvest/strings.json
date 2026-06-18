@@ -23,10 +23,12 @@
     "step": {
       "init": {
         "title": "Secvest Optionen",
-        "description": "Für schnellere Melderreaktion Status-Intervall und Melder-/Zonen-Intervall z.B. auf 10 Sekunden setzen.",
+        "description": "Für schnellere Melderreaktion die Intervalle z.B. auf 10 Sekunden setzen. Für RSSI optional einen separaten, eingeschränkten Web-Benutzer eintragen. Ohne Web-Zugangsdaten bleibt die RSSI-Abfrage deaktiviert.",
         "data": {
           "scan_interval": "Status-Intervall (Sek.)",
           "zones_interval": "Melder-/Zonen-Intervall (Sek.)",
+          "web_username": "Web-Benutzer / Code (nur RSSI)",
+          "web_password": "Web-Passwort (nur RSSI)",
           "retries": "Wiederholungen bei Fehlern",
           "breaker_threshold": "Fehler bis Schutzpause",
           "breaker_cooldown": "Schutzpause (Sek.)"

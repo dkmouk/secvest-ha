@@ -4,6 +4,8 @@ CONF_HOST = "host"
 CONF_USERNAME = "username"
 CONF_PASSWORD = "password"
 CONF_USER_CODE = "user_code"
+CONF_WEB_USERNAME = "web_username"
+CONF_WEB_PASSWORD = "web_password"
 CONF_VERIFY_SSL = "verify_ssl"
 CONF_SCAN_INTERVAL = "scan_interval"
 CONF_ZONES_INTERVAL = "zones_interval"
@@ -21,6 +23,7 @@ DEFAULT_BREAKER_THRESHOLD = 5      # nach 5 Fehlversuchen -> Pause
 DEFAULT_BREAKER_COOLDOWN = 300      # Sekunden (5 Minuten)
 
 SERVICE_SET_MODE = "secvest_set_mode"
+SERVICE_DUMP_DIAGNOSTICS = "dump_diagnostics"
 
 MODE_SET = "set"
 MODE_PARTSET = "partset"

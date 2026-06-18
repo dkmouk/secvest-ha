@@ -33,6 +33,10 @@ def _is_battery_fault(fault: dict[str, Any]) -> bool:
     return "batt" in text or "battery" in text or "akku" in text or fault_type in {"830"}
 
 
+def _truthy(value: Any) -> bool:
+    return value is True or str(value).strip().lower() in {"true", "1", "yes", "block", "visible"}
+
+
 def _fault_device_token(fault: dict[str, Any]) -> str | None:
     text = str(fault.get("ui-string") or fault.get("text") or fault.get("name") or "").strip().upper()
     match = DEVICE_TOKEN_RE.match(text)
@@ -397,6 +401,9 @@ class SecvestZoneBinarySensor(SecvestBaseEntity, BinarySensorEntity):
         battery_faults = [fault for fault in faults if _is_battery_fault(fault)]
         rf_faults = [fault for fault in faults if _is_rf_fault(fault)]
         sabotage_faults = [fault for fault in faults if _is_sabotage_fault(fault)]
+        web_battery_low = _truthy(zone.get("web_battery_low"))
+        web_supervision_fault = _truthy(zone.get("web_supervision_fault"))
+        web_sabotage = _truthy(zone.get("web_sabotage"))
         return {
             "secvest_key": self._zone_key,
             "secvest_name": zone.get("name"),
@@ -406,19 +413,29 @@ class SecvestZoneBinarySensor(SecvestBaseEntity, BinarySensorEntity):
             "inner": zone.get("inner"),
             "omittable": zone.get("omittable"),
             "omitted": zone.get("omitted"),
+            "rssi": zone.get("rssi"),
+            "rssi_current": zone.get("rssi_current"),
+            "rssi_previous": zone.get("rssi_previous"),
+            "rssi_bargraph": zone.get("rssi_bargraph"),
+            "web_battery_low": web_battery_low,
+            "web_omitted": _truthy(zone.get("web_omitted")),
+            "web_supervision_fault": web_supervision_fault,
+            "web_sabotage": web_sabotage,
+            "web_open": _truthy(zone.get("web_open")),
+            "web_raw": zone.get("web_raw"),
             "is_glassbreak": self.device_class == BinarySensorDeviceClass.SAFETY,
             "fault_count": len(faults),
             "faults": faults,
             "fault_labels": _fault_labels(faults),
-            "battery_ok": not battery_faults,
-            "battery_fault": bool(battery_faults),
+            "battery_ok": not battery_faults and not web_battery_low,
+            "battery_fault": bool(battery_faults) or web_battery_low,
             "battery_faults": battery_faults,
-            "rf_ok": not rf_faults,
-            "rf_fault": bool(rf_faults),
-            "signal_ok": not rf_faults,
-            "supervision_ok": not rf_faults,
+            "rf_ok": not rf_faults and not web_supervision_fault,
+            "rf_fault": bool(rf_faults) or web_supervision_fault,
+            "signal_ok": not rf_faults and not web_supervision_fault,
+            "supervision_ok": not rf_faults and not web_supervision_fault,
             "rf_faults": rf_faults,
-            "sabotage_ok": not sabotage_faults,
-            "sabotage_fault": bool(sabotage_faults),
+            "sabotage_ok": not sabotage_faults and not web_sabotage,
+            "sabotage_fault": bool(sabotage_faults) or web_sabotage,
             "sabotage_faults": sabotage_faults,
         }
